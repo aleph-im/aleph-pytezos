@@ -88,7 +88,7 @@ class Key():
         self,
         public_point: bytes,
         secret_exponent: Optional[bytes] = None,
-        curve: bytes = b'ed',
+        curve: bytes = b'sp',
         activation_code: Optional[str] = None,
     ) -> None:
         self.public_point = public_point
@@ -116,7 +116,7 @@ class Key():
     def from_secret_exponent(
         cls,
         secret_exponent: bytes,
-        curve=b'ed',
+        curve=b'sp',
         activation_code=None,
     ) -> 'Key':
         """Creates a key object from a secret exponent.
@@ -149,7 +149,7 @@ class Key():
     def from_public_point(
         cls,
         public_point: bytes,
-        curve: bytes = b'ed',
+        curve: bytes = b'sp',
     ) -> 'Key':
         """Creates a key object from a public elliptic point.
         :param public_point: elliptic point in the compressed format (see https://tezos.stackexchange.com/a/623/309)
@@ -239,7 +239,7 @@ class Key():
     def generate(
         cls,
         passphrase: str = '',
-        curve: bytes = b'ed',
+        curve: bytes = b'sp',
         strength: int = 128,
         language: str = DEFAULT_LANGUAGE,
         export: bool = True,
