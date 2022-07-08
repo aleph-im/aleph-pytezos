@@ -450,7 +450,6 @@ class Key():
             #signature = pysodium.crypto_sign_detached(digest, self.secret_exponent)
         # Secp256k1
         elif self.curve == b"sp":
-            print("Secret exponent", self.secret_exponent)
             pk = secp256k1.PrivateKey(self.secret_exponent)
             signature = pk.ecdsa_serialize_compact(pk.ecdsa_sign(encoded_message, digest=blake2b_32))
         # P256
