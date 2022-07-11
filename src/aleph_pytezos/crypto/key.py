@@ -169,8 +169,6 @@ class Key():
             if not set value from from PYTEZOS_PASSPHRASE env variable will be used or promted dynamically
         """
         encoded_key = scrub_input(key)
-        encrypted = encoded_key[2:3] == b'e'
-        public_or_secret = encoded_key[3:5] if encrypted else encoded_key[2:4]
 
         curve = encoded_key[:2]  # "sp", "p2" "ed"
         if curve not in [b'sp', b'p2']:
@@ -178,6 +176,15 @@ class Key():
         if not len(encoded_key) in [54, 55, 88, 98]:
             raise ValueError("Invalid length for a key encoding.")
 
+        encrypted = encoded_key[2:3] == b'e'
+        if encrypted:
+            raise Exception("Encryption not implemented")
+
+        public_or_secret = encoded_key[3:5] if encrypted else encoded_key[2:4]
+        if public_or_secret not in [b'pk', b'sk']:
+            raise Exception("Invalid prefix for a key encoding.")
+
+        encoded_key = base58_decode(encoded_key)
         is_secret = public_or_secret == b'sk'
         if not is_secret:
             return cls.from_public_point(encoded_key, curve)
