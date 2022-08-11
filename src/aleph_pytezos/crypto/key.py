@@ -131,13 +131,15 @@ class Key():
         if curve == b'ed':
             # Dealing with secret exponent or seed?
             if len(secret_exponent) == 64:
-                # The standard format of a secret key is 64 bytes, the first 32 bytes are the public key, the last 32 are secret.
-                public_key, secret = secret_exponent[:32], secret_exponent[32:]
-                public_point = nacl.signing.SigningKey(secret).verify_key.encode()
-            else:
+                # The standard format of a secret key is 64 bytes,
+                # the first 32 bytes are the public key, the last 32 are secret (or seed).
+                public_key, secret_exponent = secret_exponent[:32], secret_exponent[32:]
+                public_point = nacl.signing.SigningKey(secret_exponent).verify_key.encode()
+            elif len(secret_exponent) == 32:
                 keypair = nacl.signing.SigningKey(secret_exponent)
-                secret_exponent = keypair.encode()[32:]
                 public_point = keypair.verify_key.encode()
+            else:
+                raise AssertionError()
         # Secp256k1
         elif curve == b'sp':
             sk = secp256k1.PrivateKey(secret_exponent)
