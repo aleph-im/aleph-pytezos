@@ -131,7 +131,9 @@ class Key():
         if curve == b'ed':
             # Dealing with secret exponent or seed?
             if len(secret_exponent) == 64:
-                public_point = nacl.signing.SigningKey(secret_exponent[32:]).verify_key.encode()
+                # The standard format of a secret key is 64 bytes, the first 32 bytes are the public key, the last 32 are secret.
+                public_key, secret = secret_exponent[:32], secret_exponent[32:]
+                public_point = nacl.signing.SigningKey(secret).verify_key.encode()
             else:
                 keypair = nacl.signing.SigningKey(secret_exponent)
                 secret_exponent = keypair.encode()[32:]
