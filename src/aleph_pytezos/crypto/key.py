@@ -1,11 +1,14 @@
 import binascii
 import hashlib
 import json
+from os.path import abspath, expanduser, join
+
 import fastecdsa.curve
 import fastecdsa.ecdsa
 import fastecdsa.encoding.sec1
 import fastecdsa.keys
 import secp256k1
+import nacl.signing
 
 from mnemonic import Mnemonic
 from pyblake2 import blake2b
@@ -42,7 +45,7 @@ class CryptoExtraFallback:
     def __getattr__(self, item):
         raise ImportError(
             "Please, install packages libsodium-dev, libsecp256k1-dev, and libgmp-dev, "
-            "and Python libraries pysodium, secp256k1, and fastecdsa"
+            "and Python libraries pynacl, secp256k1, and fastecdsa"
         )
 
     def __call__(self, *args, **kwargs):
@@ -126,12 +129,13 @@ class Key():
         """
         # Ed25519
         if curve == b'ed':
-            raise Exception("Curve ed25519 not supported.")
             # Dealing with secret exponent or seed?
-            #if len(secret_exponent) == 64:
-            #    public_point = pysodium.crypto_sign_sk_to_pk(sk=secret_exponent)
-            #else:
-            #    public_point, secret_exponent = pysodium.crypto_sign_seed_keypair(seed=secret_exponent)
+            if len(secret_exponent) == 64:
+                public_point = nacl.signing.SigningKey(secret_exponent[32:]).verify_key.encode()
+            else:
+                keypair = nacl.signing.SigningKey(secret_exponent)
+                secret_exponent = keypair.encode()[32:]
+                public_point = keypair.verify_key.encode()
         # Secp256k1
         elif curve == b'sp':
             sk = secp256k1.PrivateKey(secret_exponent)
@@ -304,8 +308,7 @@ class Key():
         seed = Mnemonic.to_seed(mnemonic, passphrase=email + passphrase)
 
         if curve == b'ed':
-            raise Exception("Curve ed25519 not supported.")
-            #_, secret_exponent = pysodium.crypto_sign_seed_keypair(seed=seed[:32])
+            secret_exponent = nacl.signing.SigningKey(seed).encode()
         elif curve == b'sp':
             secret_exponent = seed[:32]
         elif curve == b'p2':
@@ -361,7 +364,6 @@ class Key():
         prefix, sk = value.split(':', maxsplit=1)
 
         if prefix == 'encrypted':
-            passphrase = get_passphrase(passphrase)
             key = cls.from_encoded_key(sk, passphrase=passphrase)
             del passphrase
         else:
@@ -385,12 +387,12 @@ class Key():
         :param ed25519_seed: encode seed rather than full key for ed25519 curve (True by default)
         :returns: the secret key associated with this key, if available
         """
+        key: bytes
         if not self.secret_exponent:
             raise ValueError("Secret key is undefined")
 
         if self.curve == b'ed' and ed25519_seed:
-            raise Exception("Curve ed25519 not supported.")
-            #key = pysodium.crypto_sign_sk_to_seed(self.secret_exponent)
+            key = nacl.signing.SigningKey(self.secret_exponent).encode()
         else:
             key = self.secret_exponent
 
@@ -452,9 +454,7 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            raise Exception("Curve ed25519 not supported.")
-            #digest = pysodium.crypto_generichash(encoded_message)
-            #signature = pysodium.crypto_sign_detached(digest, self.secret_exponent)
+            signature = nacl.signing.SigningKey(self.secret_exponent).sign(encoded_message)
         # Secp256k1
         elif self.curve == b"sp":
             pk = secp256k1.PrivateKey(self.secret_exponent)
@@ -475,7 +475,7 @@ class Key():
 
     def verify(self, signature: Union[str, bytes], message: Union[str, bytes]) -> bool:
         """Verify signature, raise exception if it is not valid.
-        :param message: sequance of bytes, raw format or hexadecimal notation
+        :param message: sequence of bytes, raw format or hexadecimal notation
         :param signature: a signature in base58 encoding
         :raises: ValueError if signature is not valid
         :returns: True if signature is valid
@@ -494,12 +494,7 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            raise Exception("Curve ed25519 not supported.")
-            #digest = pysodium.crypto_generichash(encoded_message)
-            #try:
-            #    pysodium.crypto_sign_verify_detached(decoded_signature, digest, self.public_point)
-            #except ValueError as exc:
-             #   raise ValueError('Signature is invalid.') from exc
+            nacl.signing.VerifyKey(self.public_point).verify(encoded_message, decoded_signature)
         # Secp256k1
         elif self.curve == b"sp":
             pk = secp256k1.PublicKey(self.public_point, raw=True)
