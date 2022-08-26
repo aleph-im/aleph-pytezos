@@ -178,7 +178,7 @@ class Key():
         encoded_key = scrub_input(key)
 
         curve = encoded_key[:2]  # "sp", "p2" "ed"
-        if curve not in [b'sp', b'p2']:
+        if curve not in [b'sp', b'p2', b'ed']:
             raise ValueError("Invalid prefix for a key encoding.")
         if not len(encoded_key) in [54, 55, 88, 98]:
             raise ValueError("Invalid length for a key encoding.")
