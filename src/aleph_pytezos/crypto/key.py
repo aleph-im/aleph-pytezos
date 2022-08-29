@@ -135,11 +135,10 @@ class Key():
                 # the first 32 bytes are the public key, the last 32 are secret (or seed).
                 public_key, secret_exponent = secret_exponent[:32], secret_exponent[32:]
                 public_point = nacl.signing.SigningKey(secret_exponent).verify_key.encode()
-            elif len(secret_exponent) == 32:
+            else:
+                assert len(secret_exponent) == 32, f"Secret exponent length must be 32 or 64, not {len(secret_exponent)}"
                 keypair = nacl.signing.SigningKey(secret_exponent)
                 public_point = keypair.verify_key.encode()
-            else:
-                raise AssertionError()
         # Secp256k1
         elif curve == b'sp':
             sk = secp256k1.PrivateKey(secret_exponent)
@@ -179,7 +178,7 @@ class Key():
         encoded_key = scrub_input(key)
 
         curve = encoded_key[:2]  # "sp", "p2" "ed"
-        if curve not in [b'sp', b'p2']:
+        if curve not in [b'sp', b'p2', b'ed']:
             raise ValueError("Invalid prefix for a key encoding.")
         if not len(encoded_key) in [54, 55, 88, 98]:
             raise ValueError("Invalid length for a key encoding.")
