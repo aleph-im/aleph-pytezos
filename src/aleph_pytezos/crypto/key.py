@@ -497,7 +497,8 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            nacl.signing.VerifyKey(self.public_point).verify(encoded_message, decoded_signature)
+            digest = blake2b(data=encoded_message, digest_size=32).digest()
+            nacl.signing.VerifyKey(self.public_point).verify(digest, decoded_signature)
         # Secp256k1
         elif self.curve == b"sp":
             pk = secp256k1.PublicKey(self.public_point, raw=True)
