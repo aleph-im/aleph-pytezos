@@ -178,7 +178,7 @@ class Key():
         encoded_key = scrub_input(key)
 
         curve = encoded_key[:2]  # "sp", "p2" "ed"
-        if curve not in [b'sp', b'p2']:
+        if curve not in [b'sp', b'p2', b'ed']:
             raise ValueError("Invalid prefix for a key encoding.")
         if not len(encoded_key) in [54, 55, 88, 98]:
             raise ValueError("Invalid length for a key encoding.")
@@ -497,7 +497,8 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            nacl.signing.VerifyKey(self.public_point).verify(encoded_message, decoded_signature)
+            digest = blake2b(data=encoded_message, digest_size=32).digest()
+            nacl.signing.VerifyKey(self.public_point).verify(digest, decoded_signature)
         # Secp256k1
         elif self.curve == b"sp":
             pk = secp256k1.PublicKey(self.public_point, raw=True)
