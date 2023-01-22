@@ -11,7 +11,7 @@ import secp256k1
 import nacl.signing
 
 from mnemonic import Mnemonic
-from pyblake2 import blake2b
+from hashlib import blake2b
 
 from fastecdsa.encoding.util import bytes_to_int
 from typing import Union, Optional, List
@@ -428,7 +428,9 @@ class Key():
         """Creates base58 encoded public key hash for this key.
         :returns: the public key hash for this key
         """
-        pkh = blake2b(data=self.public_point, digest_size=20).digest()
+        h = blake2b(digest_size=20)
+        h.update(self.public_point)
+        pkh = h.digest()
         prefix = {b'ed': b'tz1', b'sp': b'tz2', b'p2': b'tz3'}[self.curve]
         return base58_encode(pkh, prefix).decode()
 
@@ -497,7 +499,9 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            digest = blake2b(data=encoded_message, digest_size=32).digest()
+            h = blake2b(digest_size=32)
+            h.update(encoded_message)
+            digest = h.digest()
             nacl.signing.VerifyKey(self.public_point).verify(digest, decoded_signature)
         # Secp256k1
         elif self.curve == b"sp":
