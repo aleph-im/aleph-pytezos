@@ -33,12 +33,31 @@
 aleph-pytezos
 =============
 
+    A fork of https://github.com/baking-bad/pytezos/tree/master/src/pytezos/crypto limiting itself
+    to signature verification.
 
-    Add a short description here!
 
+Pytezos is a huge library that provides a lot of functionalities. We only require signature verification in Aleph.im
+projects for now. This repository contains a fork of pytezos limiting itself to only the bare minimum of our needs.
 
-A longer description of your project goes here...
+----------------------
+Install for developers
+----------------------
 
+::
+
+   python -m virtualenv venv
+   source venv/bin/activate
+   pip install -e .[testing]
+
+---------------------
+Release a new version
+---------------------
+
+1. Create a new release on Github.
+2. Make sure your repository is up to date: :code:`git checkout main && git pull`.
+3. Build the package: :code:`tox -e build`.
+4. Upload the package: :code:`twine upload dist/*`.
 
 .. _pyscaffold-notes:
 
