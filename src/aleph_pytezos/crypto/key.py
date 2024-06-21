@@ -7,7 +7,7 @@ import fastecdsa.curve
 import fastecdsa.ecdsa
 import fastecdsa.encoding.sec1
 import fastecdsa.keys
-import secp256k1
+import coincurve
 import nacl.signing
 
 from mnemonic import Mnemonic
@@ -141,7 +141,7 @@ class Key():
                 public_point = keypair.verify_key.encode()
         # Secp256k1
         elif curve == b'sp':
-            sk = secp256k1.PrivateKey(secret_exponent)
+            sk = coincurve.PrivateKey(secret_exponent)
             public_point = sk.pubkey.serialize()
         # P256
         elif curve == b'p2':
@@ -462,7 +462,7 @@ class Key():
             signature = nacl.signing.SigningKey(self.secret_exponent).sign(encoded_message)
         # Secp256k1
         elif self.curve == b"sp":
-            pk = secp256k1.PrivateKey(self.secret_exponent)
+            pk = coincurve.PrivateKey(self.secret_exponent)
             signature = pk.ecdsa_serialize_compact(pk.ecdsa_sign(encoded_message, digest=blake2b_32))
         # P256
         elif self.curve == b"p2":
@@ -505,7 +505,7 @@ class Key():
             nacl.signing.VerifyKey(self.public_point).verify(digest, decoded_signature)
         # Secp256k1
         elif self.curve == b"sp":
-            pk = secp256k1.PublicKey(self.public_point, raw=True)
+            pk = coincurve.PublicKey(self.public_point)
             sig = pk.ecdsa_deserialize_compact(decoded_signature)
             if not pk.ecdsa_verify(encoded_message, sig, digest=blake2b_32):
                 raise ValueError('Signature is invalid.')
