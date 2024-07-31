@@ -1,10 +1,8 @@
 from typing import Union
+
 import base58
 
-
-def tb(l):
-    return b''.join(map(lambda x: x.to_bytes(1, 'big'), l))
-
+tb = bytes
 
 base58_encodings = [
     #    Encoded   |               Decoded             |
@@ -18,9 +16,12 @@ base58_encodings = [
     (b"tz1", 36, tb([6, 161, 159]), 20, "ed25519 public key hash"),
     (b"tz2", 36, tb([6, 161, 161]), 20, "secp256k1 public key hash"),
     (b"tz3", 36, tb([6, 161, 164]), 20, "p256 public key hash"),
+    (b"tz4", 36, tb([6, 161, 16]), 20, "BLS-MinPk"),
     (b"KT1", 36, tb([2, 90, 121]), 20, "originated address"),
-    # FIXME: replace with tb()
-    (b"txr1", 37, b'\x01\x80x\x1f', 20, "tx_rollup_l2_address"),
+    (b"txr1", 37, tb([1, 128, 120, 31]), 20, "tx_rollup_l2_address"),
+    (b"sr1", 36, tb([6, 124, 117]), 20, "originated smart rollup address"),
+    (b"src1", 54, tb([17, 165, 134, 138]), 32, "smart rollup commitment hash"),
+    (b"srs1", 54, tb([17, 165, 235, 240]), 32, "smart rollup state hash"),
     (b"id", 30, tb([153, 103]), 16, "cryptobox public key hash"),
     (b'expr', 54, tb([13, 44, 64, 27]), 32, u'script expression'),
     (b"edsk", 54, tb([13, 15, 58, 7]), 32, "ed25519 seed"),
@@ -79,6 +80,7 @@ def scrub_input(v: Union[str, bytes]) -> bytes:
 
 def base58_decode(v: bytes) -> bytes:
     """Decode data using Base58 with checksum + validate binary prefix against known kinds and cut in the end.
+
     :param v: Array of bytes (use string.encode())
     :returns: bytes
     """
@@ -94,6 +96,7 @@ def base58_decode(v: bytes) -> bytes:
 
 def base58_encode(v: bytes, prefix: bytes) -> bytes:
     """Encode data using Base58 with checksum and add an according binary prefix in the end.
+
     :param v: Array of bytes
     :param prefix: Human-readable prefix (use b'') e.g. b'tz', b'KT', etc
     :returns: bytes (use string.decode())
@@ -117,14 +120,16 @@ def _validate(v: Union[str, bytes], prefixes: list):
 
 def validate_pkh(v: Union[str, bytes]):
     """Ensure parameter is a public key hash (starts with b'tz1', b'tz2', b'tz3')
+
     :param v: string or bytes
     :raises ValueError: if parameter is not a public key hash
     """
-    return _validate(v, prefixes=[b'tz1', b'tz2', b'tz3'])
+    return _validate(v, prefixes=[b'tz1', b'tz2', b'tz3', b'tz4'])
 
 
 def validate_l2_pkh(v: Union[str, bytes]):
     """Ensure parameter is a L2 public key hash (starts with b'txr1')
+
     :param v: string or bytes
     :raises ValueError: if parameter is not a public key hash
     """
@@ -133,6 +138,7 @@ def validate_l2_pkh(v: Union[str, bytes]):
 
 def validate_sig(v: Union[str, bytes]):
     """Ensure parameter is a signature (starts with b'edsig', b'spsig', b'p2sig', b'sig')
+
     :param v: string or bytes
     :raises ValueError: if parameter is not a signature
     """
@@ -193,6 +199,15 @@ def is_kt(v: Union[str, bytes]) -> bool:
     return True
 
 
+def is_sr(v: Union[str, bytes]) -> bool:
+    """Check if value is a smart rollup address."""
+    try:
+        _validate(v, prefixes=[b'sr1'])
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 def is_public_key(v: Union[str, bytes]) -> bool:
     """Check if value is a public key."""
     try:
@@ -216,7 +231,7 @@ def is_address(v: Union[str, bytes]) -> bool:
     if isinstance(v, bytes):
         v = v.decode()
     address = v.split('%')[0]
-    return is_kt(address) or is_pkh(address)
+    return is_kt(address) or is_pkh(address) or is_sr(address)
 
 
 def is_txr_address(v: Union[str, bytes]) -> bool:

@@ -1,16 +1,31 @@
-import sys
+"""
+Welcome to PyTezos!
 
-if sys.version_info[:2] >= (3, 8):
-    # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
-    from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
-else:
-    from importlib_metadata import PackageNotFoundError, version  # pragma: no cover
+To start playing with the Tezos blockchain you need to get a PyTezosClient instance.
+Just type:
 
-try:
-    # Change here if project is renamed and does not equal the package name
-    dist_name = "aleph-pytezos"
-    __version__ = version(dist_name)
-except PackageNotFoundError:  # pragma: no cover
-    __version__ = "unknown"
-finally:
-    del version, PackageNotFoundError
+>>> from pytezos import pytezos
+>>> pytezos
+
+And follow the interactive documentation.
+"""
+
+import importlib.metadata
+
+from pytezos.client import PyTezosClient
+from pytezos.contract.interface import Contract
+from pytezos.contract.interface import ContractInterface
+from pytezos.crypto.key import Key
+from pytezos.logging import logger
+from pytezos.michelson.forge import forge_micheline
+from pytezos.michelson.forge import unforge_micheline
+from pytezos.michelson.format import micheline_to_michelson
+from pytezos.michelson.micheline import MichelsonRuntimeError
+from pytezos.michelson.parse import michelson_to_micheline
+from pytezos.michelson.types.base import MichelsonType
+from pytezos.michelson.types.base import Undefined
+from pytezos.michelson.types.core import Unit
+
+__version__ = importlib.metadata.version('pytezos')
+
+pytezos = PyTezosClient()
