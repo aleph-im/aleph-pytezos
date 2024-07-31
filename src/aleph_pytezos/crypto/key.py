@@ -1,24 +1,23 @@
 import binascii
 import hashlib
 import json
-from os.path import abspath, expanduser, join
-
-import fastecdsa.curve
-import fastecdsa.ecdsa
-import fastecdsa.encoding.sec1
-import fastecdsa.keys
-import secp256k1
-import nacl.signing
+from getpass import getpass
+from hashlib import blake2b
+from os import environ as env
+from os.path import abspath
+from os.path import expanduser
+from os.path import join
+from typing import List
+from typing import Optional
+from typing import Union
 
 from mnemonic import Mnemonic
-from hashlib import blake2b
 
-from fastecdsa.encoding.util import bytes_to_int
-from typing import Union, Optional, List
-
-from .encoding import scrub_input
-from .encoding import base58_encode
-from .encoding import base58_decode
+from pytezos.crypto.encoding import base58_decode
+from pytezos.crypto.encoding import base58_encode
+from pytezos.crypto.encoding import scrub_input
+from pytezos.jupyter import InlineDocstring
+from pytezos.jupyter import get_class_docstring
 
 VALID_MNEMONIC_LENGTHS = [12, 15, 18, 21, 24]
 DEFAULT_LANGUAGE = 'english'
@@ -26,7 +25,7 @@ DEFAULT_TEZOS_DIR = '~/.tezos-client'
 
 PassphraseInput = Optional[Union[str, bytes]]
 
-"""
+
 def get_passphrase(passphrase: PassphraseInput = None, alias: Optional[str] = None) -> bytes:
     if passphrase is None:
         passphrase = env.get('PYTEZOS_PASSPHRASE')
@@ -39,20 +38,39 @@ def get_passphrase(passphrase: PassphraseInput = None, alias: Optional[str] = No
     if not isinstance(passphrase, bytes):
         raise Exception(f'bytes or str expected, got {type(passphrase).__name__}')
     return passphrase
-"""
+
 
 class CryptoExtraFallback:
     def __getattr__(self, item):
         raise ImportError(
-            "Please, install packages libsodium-dev, libsecp256k1-dev, and libgmp-dev, "
-            "and Python libraries pynacl, secp256k1, and fastecdsa"
+            "Please, install packages libsodium-dev, and libgmp-dev, "
+            "and Python libraries pysodium, coincurve, and fastecdsa"
         )
 
     def __call__(self, *args, **kwargs):
         self.__getattr__('throw')
 
 
-__crypto__ = True
+try:
+    import coincurve  # type: ignore
+    import fastecdsa.curve  # type: ignore
+    import fastecdsa.ecdsa  # type: ignore
+    import fastecdsa.encoding.sec1  # type: ignore
+    import fastecdsa.keys  # type: ignore
+    import pysodium  # type: ignore
+    from coincurve import ecdsa  # type: ignore
+    from fastecdsa.encoding.util import bytes_to_int  # type: ignore
+except ImportError as e:
+    coincurve = CryptoExtraFallback()  # type: ignore
+    ecdsa = CryptoExtraFallback()  # type: ignore
+    pysodium = CryptoExtraFallback()
+    fastecdsa = CryptoExtraFallback()
+    bytes_to_int = CryptoExtraFallback()
+    __crypto__ = False
+else:
+    __crypto__ = True
+
+
 def is_installed():
     return __crypto__
 
@@ -82,7 +100,7 @@ def validate_mnemonic(mnemonic: str, language: str = DEFAULT_LANGUAGE) -> None:
         raise ValueError('Mnemonic checksum verification failed')
 
 
-class Key():
+class Key(metaclass=InlineDocstring):
     """Represents a public or secret key for Tezos. Ed25519, Secp256k1 and P256
     are supported.
     """
@@ -91,7 +109,7 @@ class Key():
         self,
         public_point: bytes,
         secret_exponent: Optional[bytes] = None,
-        curve: bytes = b'sp',
+        curve: bytes = b'ed',
         activation_code: Optional[str] = None,
     ) -> None:
         self.public_point = public_point
@@ -99,7 +117,6 @@ class Key():
         self.curve = curve
         self.activation_code = activation_code
 
-    """
     def __repr__(self) -> str:
         res = [
             super().__repr__(),
@@ -109,7 +126,6 @@ class Key():
             get_class_docstring(self.__class__),
         ]
         return '\n'.join(res)
-    """
 
     @property
     def is_secret(self) -> bool:
@@ -119,10 +135,11 @@ class Key():
     def from_secret_exponent(
         cls,
         secret_exponent: bytes,
-        curve=b'sp',
+        curve=b'ed',
         activation_code=None,
     ) -> 'Key':
         """Creates a key object from a secret exponent.
+
         :param secret_exponent: secret exponent or seed
         :param curve: b'sp' for Secp251k1, b'p2' for P256/Secp256r1, b'ed' for Ed25519 (default)
         :param activation_code: secret for initializing account balance
@@ -131,18 +148,13 @@ class Key():
         if curve == b'ed':
             # Dealing with secret exponent or seed?
             if len(secret_exponent) == 64:
-                # The standard format of a secret key is 64 bytes,
-                # the first 32 bytes are the public key, the last 32 are secret (or seed).
-                public_key, secret_exponent = secret_exponent[:32], secret_exponent[32:]
-                public_point = nacl.signing.SigningKey(secret_exponent).verify_key.encode()
+                public_point = pysodium.crypto_sign_sk_to_pk(sk=secret_exponent)
             else:
-                assert len(secret_exponent) == 32, f"Secret exponent length must be 32 or 64, not {len(secret_exponent)}"
-                keypair = nacl.signing.SigningKey(secret_exponent)
-                public_point = keypair.verify_key.encode()
+                public_point, secret_exponent = pysodium.crypto_sign_seed_keypair(seed=secret_exponent)
         # Secp256k1
         elif curve == b'sp':
-            sk = secp256k1.PrivateKey(secret_exponent)
-            public_point = sk.pubkey.serialize()
+            sk = coincurve.PrivateKey(secret_exponent)
+            public_point = sk.public_key.format()
         # P256
         elif curve == b'p2':
             pk = fastecdsa.keys.get_public_key(bytes_to_int(secret_exponent), curve=fastecdsa.curve.P256)
@@ -156,9 +168,10 @@ class Key():
     def from_public_point(
         cls,
         public_point: bytes,
-        curve: bytes = b'sp',
+        curve: bytes = b'ed',
     ) -> 'Key':
         """Creates a key object from a public elliptic point.
+
         :param public_point: elliptic point in the compressed format (see https://tezos.stackexchange.com/a/623/309)
         :param curve: b'sp' for secp251k1, b'p2' for P256/secp256r1, b'ed' for Ed25519 (default)
         """
@@ -171,45 +184,11 @@ class Key():
         passphrase: PassphraseInput = None,
     ) -> 'Key':
         """Creates a key object from a base58 encoded key.
+
         :param key: a public or secret key in base58 encoding
         :param passphrase: the passphrase used if the key provided is an encrypted private key,
             if not set value from from PYTEZOS_PASSPHRASE env variable will be used or promted dynamically
         """
-        encoded_key = scrub_input(key)
-
-        curve = encoded_key[:2]  # "sp", "p2" "ed"
-        if curve not in [b'sp', b'p2', b'ed']:
-            raise ValueError("Invalid prefix for a key encoding.")
-        if not len(encoded_key) in [54, 55, 88, 98]:
-            raise ValueError("Invalid length for a key encoding.")
-
-        encrypted = encoded_key[2:3] == b'e'
-        if encrypted:
-            raise Exception("Encryption not implemented")
-
-        public_or_secret = encoded_key[3:5] if encrypted else encoded_key[2:4]
-        if public_or_secret not in [b'pk', b'sk']:
-            raise Exception("Invalid prefix for a key encoding.")
-
-        encoded_key = base58_decode(encoded_key)
-        is_secret = public_or_secret == b'sk'
-        if not is_secret:
-            return cls.from_public_point(encoded_key, curve)
-
-        return cls.from_secret_exponent(encoded_key, curve)
-
-    """
-    @classmethod
-    def from_encoded_key(
-        cls,
-        key: Union[str, bytes],
-        passphrase: PassphraseInput = None,
-    ) -> 'Key':
-        \"""Creates a key object from a base58 encoded key.
-        :param key: a public or secret key in base58 encoding
-        :param passphrase: the passphrase used if the key provided is an encrypted private key,
-            if not set value from from PYTEZOS_PASSPHRASE env variable will be used or promted dynamically
-        \"""
         encoded_key = scrub_input(key)
 
         curve = encoded_key[:2]  # "sp", "p2" "ed"
@@ -247,18 +226,18 @@ class Key():
             del passphrase
 
         return cls.from_secret_exponent(encoded_key, curve)
-    """
 
     @classmethod
     def generate(
         cls,
         passphrase: str = '',
-        curve: bytes = b'sp',
+        curve: bytes = b'ed',
         strength: int = 128,
         language: str = DEFAULT_LANGUAGE,
         export: bool = True,
     ):
         """Generates new key.
+
         :param passphrase: optional password
         :param curve: b'sp' for secp251k1, b'p2' for P256/secp256r1, b'ed' for Ed25519 (default)
         :param strength: mnemonic strength, default is 128
@@ -288,11 +267,12 @@ class Key():
         passphrase: str = '',
         email: str = '',
         validate: bool = True,
-        curve: bytes = b'sp',
+        curve: bytes = b'ed',
         activation_code: Optional[str] = None,
         language: str = DEFAULT_LANGUAGE,
     ) -> 'Key':
         """Creates a key object from a bip39 mnemonic.
+
         :param mnemonic: a 15 word bip39 english mnemonic
         :param passphrase: a mnemonic password or a fundraiser key
         :param email: email used if a fundraiser key is passed
@@ -311,7 +291,7 @@ class Key():
         seed = Mnemonic.to_seed(mnemonic, passphrase=email + passphrase)
 
         if curve == b'ed':
-            secret_exponent = nacl.signing.SigningKey(seed).encode()
+            _, secret_exponent = pysodium.crypto_sign_seed_keypair(seed=seed[:32])
         elif curve == b'sp':
             secret_exponent = seed[:32]
         elif curve == b'p2':
@@ -324,6 +304,7 @@ class Key():
     @classmethod
     def from_faucet(cls, source: Union[str, dict]) -> 'Key':
         """Import key from a faucet file: https://teztnets.xyz/
+
         :param source: path to the json file
         :rtype: Key
         """
@@ -354,6 +335,7 @@ class Key():
         tezos_client_dir: str = DEFAULT_TEZOS_DIR,
     ) -> 'Key':
         """Import secret key from tezos-client keychain.
+
         :param alias: key alias
         :param passphrase: if key is encrypted (optional)
         :param tezos_client_dir: path to the tezos client directory (default is `~/.tezos-client`)
@@ -367,6 +349,7 @@ class Key():
         prefix, sk = value.split(':', maxsplit=1)
 
         if prefix == 'encrypted':
+            passphrase = get_passphrase(passphrase)
             key = cls.from_encoded_key(sk, passphrase=passphrase)
             del passphrase
         else:
@@ -376,6 +359,7 @@ class Key():
 
     def public_key(self) -> str:
         """Creates base58 encoded public key representation.
+
         :returns: the public key associated with the private key
         """
         return base58_encode(self.public_point, self.curve + b'pk').decode()
@@ -383,23 +367,22 @@ class Key():
     def secret_key(
         self,
         passphrase: PassphraseInput = None,
-        ed25519_seed: bool = False,
+        ed25519_seed: bool = True,
     ):
         """Creates base58 encoded private key representation.
+
         :param passphrase: encryption phrase for the private key
         :param ed25519_seed: encode seed rather than full key for ed25519 curve (True by default)
         :returns: the secret key associated with this key, if available
         """
-        key: bytes
         if not self.secret_exponent:
             raise ValueError("Secret key is undefined")
 
         if self.curve == b'ed' and ed25519_seed:
-            key = nacl.signing.SigningKey(self.secret_exponent).encode()
+            key = pysodium.crypto_sign_sk_to_seed(self.secret_exponent)
         else:
             key = self.secret_exponent
 
-        """
         if passphrase:
             if not ed25519_seed:
                 raise NotImplementedError
@@ -419,35 +402,35 @@ class Key():
             key = salt + encrypted_sk  # we have to combine salt and encrypted key in order to decrypt later
             prefix = self.curve + b'esk'
         else:
-        """
-        prefix = self.curve + b'sk'
+            prefix = self.curve + b'sk'
 
         return base58_encode(key, prefix).decode()
 
     def public_key_hash(self) -> str:
         """Creates base58 encoded public key hash for this key.
+
         :returns: the public key hash for this key
         """
-        h = blake2b(digest_size=20)
-        h.update(self.public_point)
-        pkh = h.digest()
+        pkh = blake2b(self.public_point, digest_size=20).digest()
         prefix = {b'ed': b'tz1', b'sp': b'tz2', b'p2': b'tz3'}[self.curve]
         return base58_encode(pkh, prefix).decode()
 
     def blinded_public_key_hash(self) -> str:
         """Creates base58 encoded commitment out of activation code (required) and public key hash
+
         :return: blinded public key hash
         """
         if not self.activation_code:
             raise ValueError("Activation code is undefined")
 
-        pkh = blake2b(data=self.public_point, digest_size=20).digest()
+        pkh = blake2b(self.public_point, digest_size=20).digest()
         key = bytes.fromhex(self.activation_code)
-        blinded_pkh = blake2b(data=pkh, key=key, digest_size=20).digest()
+        blinded_pkh = blake2b(pkh, key=key, digest_size=20).digest()
         return base58_encode(blinded_pkh, b'btz1').decode()
 
     def sign(self, message: Union[str, bytes], generic: bool = False):
         """Sign a raw sequence of bytes.
+
         :param message: sequence of bytes, raw format or hexadecimal notation
         :param generic: do not specify elliptic curve if set to True
         :returns: signature in base58 encoding
@@ -459,11 +442,14 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            signature = nacl.signing.SigningKey(self.secret_exponent).sign(encoded_message)
+            digest = pysodium.crypto_generichash(encoded_message)
+            signature = pysodium.crypto_sign_detached(digest, self.secret_exponent)
         # Secp256k1
         elif self.curve == b"sp":
-            pk = secp256k1.PrivateKey(self.secret_exponent)
-            signature = pk.ecdsa_serialize_compact(pk.ecdsa_sign(encoded_message, digest=blake2b_32))
+            pk = coincurve.PrivateKey(self.secret_exponent)
+            signature = ecdsa.serialize_compact(
+                ecdsa.der_to_cdata(pk.sign(encoded_message, hasher=lambda x: blake2b_32(x).digest()))
+            )
         # P256
         elif self.curve == b"p2":
             r, s = fastecdsa.ecdsa.sign(msg=encoded_message, d=bytes_to_int(self.secret_exponent), hashfunc=blake2b_32)
@@ -480,7 +466,8 @@ class Key():
 
     def verify(self, signature: Union[str, bytes], message: Union[str, bytes]) -> bool:
         """Verify signature, raise exception if it is not valid.
-        :param message: sequence of bytes, raw format or hexadecimal notation
+
+        :param message: sequance of bytes, raw format or hexadecimal notation
         :param signature: a signature in base58 encoding
         :raises: ValueError if signature is not valid
         :returns: True if signature is valid
@@ -499,15 +486,19 @@ class Key():
 
         # Ed25519
         if self.curve == b"ed":
-            h = blake2b(digest_size=32)
-            h.update(encoded_message)
-            digest = h.digest()
-            nacl.signing.VerifyKey(self.public_point).verify(digest, decoded_signature)
+            digest = pysodium.crypto_generichash(encoded_message)
+            try:
+                pysodium.crypto_sign_verify_detached(decoded_signature, digest, self.public_point)
+            except ValueError as exc:
+                raise ValueError('Signature is invalid.') from exc
         # Secp256k1
         elif self.curve == b"sp":
-            pk = secp256k1.PublicKey(self.public_point, raw=True)
-            sig = pk.ecdsa_deserialize_compact(decoded_signature)
-            if not pk.ecdsa_verify(encoded_message, sig, digest=blake2b_32):
+            pk = coincurve.PublicKey(self.public_point)
+            if not pk.verify(
+                signature=ecdsa.cdata_to_der(ecdsa.deserialize_compact(decoded_signature)),
+                message=encoded_message,
+                hasher=lambda x: blake2b_32(x).digest(),
+            ):
                 raise ValueError('Signature is invalid.')
         # P256
         elif self.curve == b"p2":
