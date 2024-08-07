@@ -13,11 +13,7 @@ from typing import Union
 
 from mnemonic import Mnemonic
 
-from pytezos.crypto.encoding import base58_decode
-from pytezos.crypto.encoding import base58_encode
-from pytezos.crypto.encoding import scrub_input
-from pytezos.jupyter import InlineDocstring
-from pytezos.jupyter import get_class_docstring
+from aleph_pytezos.crypto.encoding import base58_decode, scrub_input, base58_encode
 
 VALID_MNEMONIC_LENGTHS = [12, 15, 18, 21, 24]
 DEFAULT_LANGUAGE = 'english'
@@ -100,7 +96,7 @@ def validate_mnemonic(mnemonic: str, language: str = DEFAULT_LANGUAGE) -> None:
         raise ValueError('Mnemonic checksum verification failed')
 
 
-class Key(metaclass=InlineDocstring):
+class Key:
     """Represents a public or secret key for Tezos. Ed25519, Secp256k1 and P256
     are supported.
     """
@@ -122,8 +118,8 @@ class Key(metaclass=InlineDocstring):
             super().__repr__(),
             '\nPublic key hash',
             self.public_key_hash(),
-            '\nHelpers',
-            get_class_docstring(self.__class__),
+            '\nClass',
+            self.__class__,
         ]
         return '\n'.join(res)
 
