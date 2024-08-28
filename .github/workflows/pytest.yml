@@ -1,0 +1,33 @@
+name: Test/Coverage with Python
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        id: setup-python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.12
+
+      - name: Install needed debian packages
+        run: sudo apt install libsodium-dev libgmp-dev
+
+      - name: Install project
+        run: pip install -e .
+
+      - name: Install pytest and pytest-cov
+        run: pip install pytest pytest-cov
+
+      - name: Run tests
+        run: pytest
